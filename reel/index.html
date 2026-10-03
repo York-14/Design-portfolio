@@ -1,3 +1,14 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="黄金角・ロジスティック写像・二重振り子・対称カオス写像・花瓶の曲面式を、時刻 t の関数としてリアルタイムに描く15秒のジェネラティブ・モーションリール。">
+<meta property="og:title" content="ORDER × CHAOS — Generative Motion Reel">
+<meta property="og:description" content="数式に宿る、自然のかたち。15秒 / 1920×1080 / 60fps">
+<meta property="og:image" content="https://york-14.github.io/Design-portfolio/reel/poster.jpg">
+<meta property="og:type" content="video.other">
+<meta name="twitter:card" content="summary_large_image">
 <title>Order × Chaos Reel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,7 +29,7 @@
   --f-jp: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
   color-scheme: dark;
 }
-html, body { background: var(--ink); color: var(--paper); }
+html, body { margin: 0; background: var(--ink); color: var(--paper); }
 body { font-family: var(--f-mono); font-size: 13px; }
 .wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; display: grid; gap: 18px; }
 .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 24px; }
@@ -55,7 +66,8 @@ body { font-family: var(--f-mono); font-size: 13px; }
 .render-mode .head, .render-mode .bar, .render-mode .chapters, .render-mode .note, .render-mode .big-play, .render-mode .loading { display: none; }
 .render-mode .stage { width: 1920px; height: 1080px; border: 0; aspect-ratio: auto; }
 </style>
-
+</head>
+<body>
 <main class="wrap">
   <header class="head">
     <h1>ORDER <em>×</em> CHAOS</h1>
@@ -828,3 +840,5 @@ document.addEventListener("keydown", e => { if (e.code === "Space" && e.target =
 
 fontsReady.then(() => { ui.loading.hidden = true; show(RENDER ? 0 : (reduced ? 10.45 : 10.45)); window.REEL.ready = true; });
 </script>
+</body>
+</html>
