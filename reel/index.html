@@ -30,6 +30,7 @@
   color-scheme: dark;
 }
 html, body { margin: 0; background: var(--ink); color: var(--paper); }
+[hidden] { display: none !important; }
 body { font-family: var(--f-mono); font-size: 13px; }
 .wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; display: grid; gap: 18px; }
 .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 24px; }
@@ -820,11 +821,22 @@ function show(t) { cur = t; render(t); ui.scrub.value = t; const f = Math.floor(
 function startSound(at) { stopSound(); if (!soundOn || !actx || !abuf) return; src = actx.createBufferSource(); src.buffer = abuf; src.connect(actx.destination); src.start(0, at); }
 function stopSound() { if (src) { try { src.stop(); } catch (e) {} src = null; } }
 function clock() { return actx && soundOn ? actx.currentTime : performance.now() / 1000; }
+let starting = false, audioJob = null;
 async function play() {
-  if (!actx && soundOn) { try { actx = new AudioContext(); abuf = abuf || await buildAudio(actx.sampleRate); } catch (e) { soundOn = false; syncSoundBtn(); } }
+  if (playing || starting) return;
+  starting = true; ui.big.hidden = true; ui.play.textContent = "Pause";
+  if (soundOn && !abuf) {
+    ui.loading.textContent = "Composing sound…"; ui.loading.hidden = false;
+    try { actx = actx || new AudioContext(); if (actx.state === "suspended") actx.resume();
+      audioJob = audioJob || buildAudio(actx.sampleRate); abuf = await audioJob; }
+    catch (e) { soundOn = false; syncSoundBtn(); }
+    ui.loading.hidden = true;
+  }
   if (actx && actx.state === "suspended") await actx.resume();
+  starting = false;
+  if (ui.play.textContent !== "Pause") return;            // paused while sound was composing
   if (cur >= DUR - .02) cur = 0;
-  playing = true; startAt = cur; t0 = clock(); startSound(cur); ui.play.textContent = "Pause"; ui.big.hidden = true; requestAnimationFrame(tick);
+  playing = true; startAt = cur; t0 = clock(); startSound(cur); requestAnimationFrame(tick);
 }
 function pause() { playing = false; stopSound(); ui.play.textContent = "Play"; }
 function seek(t) { const was = playing; if (was) pause(); show(t); if (was) play(); }
@@ -832,11 +844,11 @@ function tick() { if (!playing) return; const t = startAt + (clock() - t0);
   if (t >= DUR) { show(DUR - 1e-3); pause(); ui.big.hidden = false; return; }
   show(t); requestAnimationFrame(tick); }
 function syncSoundBtn() { ui.sound.setAttribute("aria-pressed", String(soundOn)); ui.sound.textContent = soundOn ? "Sound on" : "Sound off"; }
-ui.play.addEventListener("click", () => playing ? pause() : play());
+ui.play.addEventListener("click", () => playing || starting ? pause() : play());
 ui.big.addEventListener("click", () => play());
 ui.scrub.addEventListener("input", () => { if (playing) pause(); show(+ui.scrub.value); });
 ui.sound.addEventListener("click", () => { const was = playing; if (was) pause(); soundOn = !soundOn; syncSoundBtn(); if (was) play(); });
-document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); playing ? pause() : play(); } });
+document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); playing || starting ? pause() : play(); } });
 
 fontsReady.then(() => { ui.loading.hidden = true; show(RENDER ? 0 : (reduced ? 10.45 : 10.45)); window.REEL.ready = true; });
 </script>
