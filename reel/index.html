@@ -1,0 +1,830 @@
+<title>Order × Chaos Reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;500&family=Zen+Kaku+Gothic+New:wght@400;500&display=swap">
+<style>
+/* Layout: a cinema stage (16:9, letterboxed in ink) with a quiet transport bar and chapter index beneath. Single dark look: it is a film. */
+:root {
+  --ink: #07070b;
+  --ink-2: #111118;
+  --line: #262532;
+  --paper: #ece9f2;
+  --muted: #8d8a9c;
+  --pink: #f3a3c6;
+  --blue: #8fd0ee;
+  --f-disp: "Archivo", "Arial Narrow", sans-serif;
+  --f-serif: "Instrument Serif", Georgia, serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --f-jp: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
+  color-scheme: dark;
+}
+html, body { background: var(--ink); color: var(--paper); }
+body { font-family: var(--f-mono); font-size: 13px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; display: grid; gap: 18px; }
+.head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 24px; }
+.head h1 { margin: 0; font-family: var(--f-disp); font-stretch: 125%; font-weight: 800; font-size: clamp(20px, 3.2vw, 30px); letter-spacing: 0.01em; text-wrap: balance; }
+.head h1 em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: var(--pink); font-stretch: normal; padding-inline: 0.15em; }
+.head p { margin: 0; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px; }
+.stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: #000; overflow: hidden; border: 1px solid var(--line); }
+.stage canvas { display: block; width: 100%; height: 100%; }
+.big-play { position: absolute; inset: 0; display: grid; place-items: center; background: transparent; border: 0; cursor: pointer; color: var(--paper); }
+.big-play span { display: grid; place-items: center; width: clamp(56px, 9vw, 92px); aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(236, 233, 242, 0.55); background: rgba(7, 7, 11, 0.45); backdrop-filter: blur(6px); transition: transform 0.2s, border-color 0.2s; }
+.big-play:hover span, .big-play:focus-visible span { transform: scale(1.06); border-color: var(--pink); }
+.big-play svg { width: 34%; margin-left: 8%; fill: currentColor; }
+.loading { position: absolute; left: 16px; bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.bar { display: grid; grid-template-columns: auto auto 1fr auto; gap: 14px; align-items: center; }
+.btn { font: inherit; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); padding: 8px 12px; cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px; }
+.btn:hover { border-color: var(--muted); }
+.btn:focus-visible, .scrub:focus-visible, .chapters button:focus-visible, .big-play:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.btn[aria-pressed="true"] { border-color: var(--pink); color: var(--pink); }
+.tc { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 9ch; }
+.scrub { width: 100%; min-width: 0; accent-color: var(--pink); }
+.chapters { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.chapters li { background: var(--ink); min-width: 0; }
+.chapters button { width: 100%; text-align: left; font: inherit; color: var(--paper); background: transparent; border: 0; padding: 12px 14px; cursor: pointer; display: grid; gap: 4px; }
+.chapters button:hover { background: var(--ink-2); }
+.chapters .n { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chapters .t { font-family: var(--f-disp); font-stretch: 112%; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
+.chapters .s { color: var(--muted); font-family: var(--f-jp); font-size: 12px; }
+.chapters li.on .t { color: var(--pink); }
+.note { margin: 0; max-width: 68ch; color: var(--muted); font-family: var(--f-jp); font-size: 13px; line-height: 1.8; }
+.note code { font-family: var(--f-mono); color: var(--paper); font-size: 12px; }
+@media (max-width: 560px) { .bar { grid-template-columns: auto 1fr auto; } .tc { display: none; } }
+/* Render mode (used by the offline exporter): the canvas alone at native size. */
+.render-mode .wrap { padding: 0; max-width: none; display: block; }
+.render-mode .head, .render-mode .bar, .render-mode .chapters, .render-mode .note, .render-mode .big-play, .render-mode .loading { display: none; }
+.render-mode .stage { width: 1920px; height: 1080px; border: 0; aspect-ratio: auto; }
+</style>
+
+<main class="wrap">
+  <header class="head">
+    <h1>ORDER <em>×</em> CHAOS</h1>
+    <p>Generative Motion Reel · 15 s · 1920×1080 · 60 fps</p>
+  </header>
+  <div class="stage" id="stage">
+    <canvas id="out" width="1920" height="1080" aria-label="Order × Chaos motion reel"></canvas>
+    <button class="big-play" id="bigPlay" type="button" aria-label="Play reel with sound"><span><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M0 0 10 6 0 12z"/></svg></span></button>
+    <div class="loading" id="loading">Composing…</div>
+  </div>
+  <div class="bar">
+    <button class="btn" id="play" type="button">Play</button>
+    <span class="tc" id="tc">00:00</span>
+    <input class="scrub" id="scrub" type="range" min="0" max="15" step="0.001" value="10.45" aria-label="Timeline">
+    <button class="btn" id="sound" type="button" aria-pressed="true">Sound on</button>
+  </div>
+  <ol class="chapters" id="chapters"></ol>
+  <p class="note">すべてのフレームは時刻 <code>t</code> の関数として、ブラウザ内でリアルタイムに生成されています（映像素材・音声素材なし）。黄金角、ロジスティック写像、二重振り子（RK4）、対称カオス写像、花瓶の曲面式。これまでの作品の数式をひとつの流れに編み直したリールです。サウンドも Web Audio で同じタイムラインから合成しています。</p>
+</main>
+
+<script>
+"use strict";
+// ───────────────────────────────────────────────────────────── constants
+const W = 1920, H = 1080, CX = 960, CY = 540, DUR = 15, FPS = 60;
+const NAME = "YORK-14";
+const GA = Math.PI * (3 - Math.sqrt(5));              // golden angle, rad
+const GA_DEG = 137.50776405003785;
+const RENDER = location.hash === "#render";
+if (RENDER) document.documentElement.classList.add("render-mode");
+
+const CH = [ // chapters: start time, label, JP line
+  { t: 0.0,  n: "SEED",            en: "ONE SEED",          jp: "ひとつの種から" },
+  { t: 2.0,  n: "GOLDEN ANGLE",    en: "GROWS INTO ORDER",  jp: "秩序が育ち" },
+  { t: 4.5,  n: "LOGISTIC MAP",    en: "ORDER DRIFTS",      jp: "秩序はゆらぎ" },
+  { t: 6.5,  n: "DOUBLE PENDULUM", en: "INTO CHAOS",        jp: "混沌へ" },
+  { t: 9.0,  n: "SYMMETRIC ICONS", en: "CHAOS BLOOMS",      jp: "混沌は咲き" },
+  { t: 11.5, n: "GENERATIVE VASE", en: "INTO FORM",         jp: "かたちになる" },
+  { t: 13.0, n: "END",             en: "",                  jp: "" },
+];
+// impacts drive flash / shake / aberration in post (time, strength)
+const HITS = [[0.5,.35],[2.0,1],[4.5,.9],[6.5,1],[8.6,1.1],[9.0,.8],[9.5,.55],[10.0,.7],[10.38,.6],[11.5,.8],[13.0,1.3]];
+
+// ───────────────────────────────────────────────────────────── math utils
+const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const eOutExpo = x => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+const eInExpo = x => x <= 0 ? 0 : Math.pow(2, 10 * x - 10);
+const eInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eInOutExpo = x => x <= 0 ? 0 : x >= 1 ? 1 : x < .5 ? Math.pow(2, 20 * x - 10) / 2 : (2 - Math.pow(2, -20 * x + 10)) / 2;
+const eOutCubic = x => 1 - Math.pow(1 - x, 3);
+const eOutBack = x => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const fract = x => x - Math.floor(x);
+const hash = n => fract(Math.sin(n * 127.1 + 311.7) * 43758.5453123);
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const vnoise = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return lerp(hash(i), hash(i + 1), u) * 2 - 1; };
+
+// ───────────────────────────────────────────────────────────── palette
+// blue (order) ↔ pink (chaos), the two-colour axis of the Double Pendulum work
+const BLUE = [199, 82, 70], PINK = [332, 84, 74];
+function hsl2rgb(h, s, l) { h /= 360; s /= 100; l /= 100; const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t => { t = fract(t); return t < 1/6 ? p + (q - p) * 6 * t : t < .5 ? q : t < 2/3 ? p + (q - p) * (2/3 - t) * 6 : p; };
+  return [f(h + 1/3) * 255, f(h) * 255, f(h - 1/3) * 255]; }
+const LUT = [], LUTA = [];
+for (let i = 0; i < 256; i++) { const k = i / 255;
+  const rgb = hsl2rgb(lerp(BLUE[0], PINK[0], k), lerp(BLUE[1], PINK[1], k), lerp(BLUE[2], PINK[2], k));
+  LUTA.push(rgb); LUT.push(`rgb(${rgb[0] | 0},${rgb[1] | 0},${rgb[2] | 0})`); }
+const col = k => LUT[clamp(k * 255 | 0, 0, 255)];
+const C_PINK = col(1), C_BLUE = col(0), C_PAPER = "#efecf5", C_GOLD = "#f2cf8a", C_MUTED = "rgba(239,236,245,0.55)";
+// density colour ramp for icons: ink → blue → pink → white
+const DENS = new Uint8Array(256 * 3);
+(() => { const st = [[0, [0, 0, 0]], [.32, [40, 120, 175]], [.62, [236, 120, 172]], [.86, [255, 214, 232]], [1, [255, 255, 255]]];
+  for (let i = 0; i < 256; i++) { const k = i / 255; let j = 0; while (j < st.length - 2 && k > st[j + 1][0]) j++;
+    const a = st[j], b = st[j + 1], u = clamp((k - a[0]) / (b[0] - a[0]));
+    for (let c = 0; c < 3; c++) DENS[i * 3 + c] = lerp(a[1][c], b[1][c], u); } })();
+
+// ───────────────────────────────────────────────────────────── canvases
+const out = document.getElementById("out");
+const sc = document.createElement("canvas"); sc.width = W; sc.height = H;
+const c = sc.getContext("2d");
+const F = { disp: '"Archivo", "Arial Narrow", sans-serif', serif: '"Instrument Serif", Georgia, serif',
+            mono: '"JetBrains Mono", ui-monospace, monospace', jp: '"Zen Kaku Gothic New", "Hiragino Sans", sans-serif' };
+function font(size, fam = F.mono, weight = 400, stretch = "normal", style = "normal") {
+  c.font = `${style} ${weight} ${size}px ${fam}`; c.fontStretch = stretch; c.letterSpacing = "0px"; }
+
+// ───────────────────────────────────────────────────────────── precompute: scene data
+const R = mulberry32(0x9E3779B9);
+
+// golden angle spiral
+const NG = 2400, gX = new Float32Array(NG);
+for (let i = 0; i < NG; i++) gX[i] = hash(i * 1.618 + 3.1);
+
+// bifurcation diagram of x ← r x (1 − x), r ∈ [2.6, 4.0]
+const NC = 1000, NS = 60, R0 = 2.6, R1 = 4.0, bY = new Float32Array(NC * NS);
+for (let ci = 0; ci < NC; ci++) { const r = R0 + (R1 - R0) * ci / (NC - 1); let x = 0.31 + 0.2 * hash(ci);
+  for (let k = 0; k < 400; k++) x = r * x * (1 - x);
+  for (let s = 0; s < NS; s++) { x = r * x * (1 - x); bY[ci * NS + s] = x; } }
+const rToX = r => 150 + (r - R0) / (R1 - R0) * 1620;
+const xToY = x => 930 - x * 790;
+
+// double pendulum, RK4 (m = l = 1, g = 9.81), main + ghost offset by ε = 1e-8 rad
+const PEND = (() => { const g = 9.81;
+  const d = (s, o) => { const a = s[0], b = s[1], w1 = s[2], w2 = s[3], D = a - b, den = 3 - Math.cos(2 * D);
+    o[0] = w1; o[1] = w2;
+    o[2] = (-g * 3 * Math.sin(a) - g * Math.sin(a - 2 * b) - 2 * Math.sin(D) * (w2 * w2 + w1 * w1 * Math.cos(D))) / den;
+    o[3] = (2 * Math.sin(D) * (w1 * w1 * 2 + g * 2 * Math.cos(a) + w2 * w2 * Math.cos(D))) / den; };
+  const k1 = [0,0,0,0], k2 = [0,0,0,0], k3 = [0,0,0,0], k4 = [0,0,0,0], tmp = [0,0,0,0];
+  const step = (s, h) => { d(s, k1); for (let i = 0; i < 4; i++) tmp[i] = s[i] + h / 2 * k1[i]; d(tmp, k2);
+    for (let i = 0; i < 4; i++) tmp[i] = s[i] + h / 2 * k2[i]; d(tmp, k3);
+    for (let i = 0; i < 4; i++) tmp[i] = s[i] + h * k3[i]; d(tmp, k4);
+    for (let i = 0; i < 4; i++) s[i] += h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]); };
+  const RATE = 240, SUB = 10, T = 15, N = RATE * T;
+  const A = new Float32Array(N * 4), B = new Float32Array(N * 4); // [x1,y1,x2,y2] per sample
+  const sa = [2.2, 2.6, 0, 0], sb = [2.2 + 1e-8, 2.6, 0, 0];
+  const put = (arr, s, i) => { arr[i*4] = Math.sin(s[0]); arr[i*4+1] = Math.cos(s[0]); arr[i*4+2] = arr[i*4] + Math.sin(s[1]); arr[i*4+3] = arr[i*4+1] + Math.cos(s[1]); };
+  for (let i = 0; i < N; i++) { put(A, sa, i); put(B, sb, i); for (let k = 0; k < SUB; k++) { step(sa, 1 / (RATE * SUB)); step(sb, 1 / (RATE * SUB)); } }
+  return { A, B, RATE, N };
+})();
+
+// Field–Golubitsky symmetric icons: z ← (λ + α|z|² + β Re(zⁿ) + iω) z + γ z̄ⁿ⁻¹
+const ICONS = [
+  { p: [-1.806, 1.806, 0, 1, 0, 5],     n: 520000,  G: 640, sym: "D5"  },
+  { p: [2.409, -2.5, 0, 0.9, 0, 23],    n: 520000,  G: 640, sym: "D23" },
+  { p: [-2.05, 3, -16.79, 1, 0, 9],     n: 2600000, G: 900, sym: "D9"  },
+];
+for (const ic of ICONS) {
+  const [l, a, b, g, w, n] = ic.p; let x = 0.1, y = 0.07;
+  const xs = new Float32Array(ic.n), ys = new Float32Array(ic.n); let Rm = 0;
+  for (let i = 0; i < ic.n + 500; i++) {
+    let zr = 1, zi = 0, pr = 1, pi = 0;                     // zⁿ and z̄ⁿ⁻¹
+    for (let k = 0; k < n - 1; k++) { const t = zr * x - zi * y; zi = zr * y + zi * x; zr = t; }
+    pr = zr; pi = -zi;                                       // z̄ⁿ⁻¹ = conj(zⁿ⁻¹)
+    const znr = zr * x - zi * y;                              // Re(zⁿ)
+    const zz = x * x + y * y, p = l + a * zz + b * znr;
+    const nx = p * x - w * y + g * pr, ny = p * y + w * x + g * pi;
+    x = nx; y = ny;
+    if (i >= 500) { xs[i - 500] = x; ys[i - 500] = y; const r2 = x * x + y * y; if (r2 > Rm) Rm = r2; }
+  }
+  Rm = Math.sqrt(Rm) * 1.03; const G = ic.G, cells = new Uint32Array(ic.n);
+  for (let i = 0; i < ic.n; i++) { const gx = ((xs[i] / Rm) * 0.5 + 0.5) * G | 0, gy = ((ys[i] / Rm) * 0.5 + 0.5) * G | 0; cells[i] = clamp(gy, 0, G - 1) * G + clamp(gx, 0, G - 1); }
+  ic.cells = cells; ic.hist = new Uint32Array(G * G); ic.k = 0; ic.max = 1;
+  ic.cv = document.createElement("canvas"); ic.cv.width = ic.cv.height = G; ic.cx = ic.cv.getContext("2d");
+  ic.img = ic.cx.createImageData(G, G); ic.lastK = -1;
+}
+function iconImage(ic, k) {
+  k = clamp(k | 0, 0, ic.n);
+  if (k < ic.k) { ic.hist.fill(0); ic.k = 0; ic.max = 1; }
+  const h = ic.hist, cells = ic.cells; let m = ic.max;
+  for (let i = ic.k; i < k; i++) { const v = ++h[cells[i]]; if (v > m) m = v; }
+  ic.k = k; ic.max = m;
+  if (ic.lastK !== k) {
+    const d = ic.img.data, inv = 1 / Math.log(1 + m * 0.55), N = h.length;
+    for (let i = 0, j = 0; i < N; i++, j += 4) { const v = h[i];
+      if (v === 0) { d[j] = d[j+1] = d[j+2] = 0; d[j+3] = 255; continue; }
+      const q = Math.min(255, Math.pow(Math.log(1 + v) * inv, 0.78) * 255) | 0;
+      d[j] = DENS[q*3]; d[j+1] = DENS[q*3+1]; d[j+2] = DENS[q*3+2]; d[j+3] = 255; }
+    ic.cx.putImageData(ic.img, 0, 0); ic.lastK = k;
+  }
+  return ic.cv;
+}
+// petals sampled from the hero icon's full density (they will scatter, then become the vase)
+const NP = 6000, HERO = ICONS[2];
+const P0 = new Float32Array(NP * 2), PV = new Float32Array(NP * 4);
+(() => { const G = HERO.G, hist = new Uint32Array(G * G); let m = 0;
+  for (let i = 0; i < HERO.n; i++) { const v = ++hist[HERO.cells[i]]; if (v > m) m = v; }
+  const lm = Math.log(1 + m); let i = 0, guard = 0;
+  while (i < NP && guard++ < 5e6) { const cell = R() * G * G | 0, v = hist[cell]; if (!v) continue;
+    if (R() < Math.pow(Math.log(1 + v) / lm, 1.6)) { P0[i*2] = (cell % G) / G - .5; P0[i*2+1] = (cell / G | 0) / G - .5;
+      PV[i*4] = R(); PV[i*4+1] = R(); PV[i*4+2] = R(); PV[i*4+3] = R(); i++; } } })();
+
+// generative vase (after the Bamboo generator): r(θ,z) = R₀(z)·(1 + A·W(n(θ + τ(z))) + A₂·W₂)
+const VT = 100, VZ = 60, V3 = new Float32Array(NP * 3);
+(() => { const n = 6, twist = -122 * Math.PI / 180;
+  const prof = z => 1 + 0.42 * Math.exp(-Math.pow((z - .26) / .24, 2)) - 0.30 * Math.exp(-Math.pow((z - .78) / .16, 2)) + 0.18 * Math.pow(z, 6);
+  const Wp = u => Math.pow(Math.abs(Math.cos(u / 2)), 1.4) * 2 - 1;      // "petal" wave
+  for (let iz = 0; iz < VZ; iz++) for (let it = 0; it < VT; it++) { const i = iz * VT + it, z = iz / (VZ - 1), th = it / VT * Math.PI * 2;
+    const r = 150 * prof(z) * (1 + 0.075 * Wp(n * (th + twist * z)) + 0.02 * Math.sin(3 * (th - twist * z * .6)));
+    V3[i*3] = r * Math.cos(th); V3[i*3+1] = (0.5 - z) * 600; V3[i*3+2] = r * Math.sin(th); } })();
+
+// ───────────────────────────────────────────────────────────── text helpers
+function txt(s, x, y, o = {}) {
+  font(o.size || 16, o.fam || F.mono, o.weight || 400, o.stretch || "normal", o.style || "normal");
+  if (o.ls) c.letterSpacing = o.ls + "px";
+  c.textAlign = o.align || "left"; c.textBaseline = o.base || "alphabetic";
+  c.globalAlpha = o.alpha == null ? 1 : o.alpha; c.fillStyle = o.color || C_PAPER;
+  c.fillText(s, x, y); c.globalAlpha = 1; c.letterSpacing = "0px";
+}
+const GLYPHS = "0123456789ABCDEF#%&*+/<>=?";
+function scramble(s, p, t, seed = 0) { let o = ""; const n = s.length;
+  for (let i = 0; i < n; i++) { const ch = s[i]; if (ch === " " || i < p * n) { o += ch; continue; }
+    if (i > p * n + 6) { o += " "; continue; }
+    o += GLYPHS[(hash(i * 7.3 + Math.floor(t * 30) + seed) * GLYPHS.length) | 0]; }
+  return o; }
+// per-letter masked reveal: letters rise into place, then leave upward
+function reveal(s, x, y, o, pin, pout = 0) {
+  if (pin <= 0 || pout >= 1) return;
+  font(o.size, o.fam, o.weight, o.stretch || "normal", o.style || "normal");
+  const ls = o.ls || 0, n = s.length, stag = o.stag == null ? 0.045 : o.stag;
+  let total = 0; const ws = []; for (let i = 0; i < n; i++) { const w = c.measureText(s[i]).width; ws.push(w); total += w + ls; }
+  let cx = o.align === "center" ? x - total / 2 : o.align === "right" ? x - total : x;
+  c.save(); c.beginPath(); c.rect(cx - 40, y - o.size * 1.02, total + 80, o.size * 1.3); c.clip();
+  c.fillStyle = o.color || C_PAPER; c.textBaseline = "alphabetic"; c.textAlign = "left";
+  for (let i = 0; i < n; i++) {
+    const a = eOutExpo(clamp(pin * (1 + n * stag) - i * stag));
+    const b = eInExpo(clamp(pout * (1 + n * stag * .5) - i * stag * .5));
+    const dy = (1 - a) * o.size * 1.05 - b * o.size * 1.05;
+    c.globalAlpha = (o.alpha == null ? 1 : o.alpha);
+    c.fillText(s[i], cx, y + dy); cx += ws[i] + ls; }
+  c.restore(); c.globalAlpha = 1;
+}
+function narrative(t, i) {
+  const ch = CH[i], t0 = ch.t, t1 = CH[i + 1].t, pin = seg(t, t0 + .06, t0 + .75), pout = seg(t, t1 - .2, t1 - .02);
+  if (pin <= 0 || pout >= 1) return;
+  reveal(ch.en, 110, 214, { size: 54, fam: F.disp, weight: 800, stretch: "expanded", ls: 1 }, pin, pout);
+  const a = eOutCubic(seg(t, t0 + .3, t0 + .8)) * (1 - seg(t, t1 - .25, t1 - .05));
+  txt(ch.jp, 112, 262, { size: 22, fam: F.jp, weight: 500, alpha: .78 * a, ls: 4 });
+  c.globalAlpha = .7 * a; c.fillStyle = C_PINK; c.fillRect(112, 286, 46 * eOutExpo(seg(t, t0 + .2, t0 + .9)), 2); c.globalAlpha = 1;
+}
+
+// ───────────────────────────────────────────────────────────── shared camera / fx curves
+function hitEnv(t, k) { let v = 0; for (const [ti, s] of HITS) if (t >= ti) v += s * Math.exp(-(t - ti) * k); return v; }
+function fx(t) {
+  const shake = hitEnv(t, 7) * 16;
+  return {
+    sx: vnoise(t * 38) * shake, sy: vnoise(t * 41 + 9) * shake,
+    flash: Math.min(.6, hitEnv(t, 18) * .38),
+    aberr: 0.0012 + hitEnv(t, 8) * 0.010 + seg(t, 12.6, 13.0) * (1 - seg(t, 13.0, 13.4)) * 0.012,
+    zoom: hitEnv(t, 11) * 0.10 + eInExpo(seg(t, 12.55, 13.0)) * (1 - eOutExpo(seg(t, 13.0, 13.35))) * 0.22 + eInExpo(seg(t, 6.3, 6.5)) * (1 - seg(t, 6.5, 6.7)) * .12,
+    glitch: Math.max(seg(t, 8.58, 8.62) * (1 - seg(t, 8.75, 9.0)), seg(t, 4.3, 4.5) * (1 - seg(t, 4.5, 4.6)) * .7,
+                     (t > 9.48 && t < 9.56) || (t > 9.98 && t < 10.06) ? .6 : 0, seg(t, 12.9, 13.0) * (1 - seg(t, 13.0, 13.15))),
+    bloom: 1.0 + hitEnv(t, 6) * .8,
+  };
+}
+
+// ───────────────────────────────────────────────────────────── scenes
+function sceneSeed(t) {
+  // faint golden grid and crosshair
+  const g = eOutExpo(seg(t, 0.05, 1.3));
+  c.strokeStyle = C_PAPER; c.lineWidth = 1;
+  for (let k = -8; k <= 8; k++) { const x = CX + k * 120, y = CY + k * 120, a = 0.055 * g * (1 - Math.abs(k) / 9);
+    c.globalAlpha = a; c.beginPath(); c.moveTo(x, CY - 560 * g); c.lineTo(x, CY + 560 * g); c.stroke();
+    if (Math.abs(k) <= 4) { c.beginPath(); c.moveTo(CX - 980 * g, y); c.lineTo(CX + 980 * g, y); c.stroke(); } }
+  const ch = eOutExpo(seg(t, 0.15, 1.0)); c.globalAlpha = .35;
+  c.beginPath(); c.moveTo(CX - 960 * ch, CY); c.lineTo(CX + 960 * ch, CY); c.moveTo(CX, CY - 540 * ch); c.lineTo(CX, CY + 540 * ch); c.stroke();
+  c.globalAlpha = 1;
+  // the seed point and its beat rings
+  const ign = seg(t, 0.48, 0.52), coll = eInExpo(seg(t, 1.6, 2.0));
+  if (ign > 0) {
+    for (const [tb, k] of [[0.5, 0], [1.0, 1], [1.5, 0], [1.75, 1]]) { if (t < tb) continue; const u = t - tb;
+      const r = 20 + eOutExpo(clamp(u / .9)) * 620; c.globalAlpha = Math.max(0, .9 - u * 1.1); c.strokeStyle = col(k);
+      c.lineWidth = 2.5 - u * 2; c.beginPath(); c.arc(CX, CY, r, 0, Math.PI * 2); c.stroke(); }
+    const pulse = 1 + .5 * Math.exp(-((t - .5) % .5) * 8);
+    const rad = (6 + 4 * pulse) * (1 + coll * 2.5);
+    const gr = c.createRadialGradient(CX, CY, 0, CX, CY, rad * 8);
+    gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(.12, "rgba(243,163,198,.65)"); gr.addColorStop(1, "rgba(143,208,238,0)");
+    c.globalAlpha = ign; c.fillStyle = gr; c.beginPath(); c.arc(CX, CY, rad * 8, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
+  }
+  // readouts
+  const p1 = seg(t, .55, 1.15);
+  if (p1 > 0) {
+    const fade = 1 - seg(t, 1.75, 1.95);
+    txt(scramble("SEED  0x9E3779B9", p1, t), CX + 44, CY - 26, { size: 20, alpha: fade, ls: 2 });
+    txt(scramble("= ⌊2³² / φ⌋", seg(t, .8, 1.3), t, 3), CX + 44, CY + 6, { size: 20, alpha: .6 * fade, color: C_PINK, ls: 2 });
+    txt(scramble("φ = 1.6180339887…", seg(t, 1.0, 1.5), t, 5), CX + 44, CY + 36, { size: 20, alpha: .45 * fade, ls: 2 });
+  }
+  // big title under the seed
+  reveal("ONE SEED", CX, CY + 300, { size: 150, fam: F.disp, weight: 900, stretch: "ultra-expanded", align: "center", ls: 6, stag: .07, alpha: .92 },
+    seg(t, 0.95, 1.6), seg(t, 1.72, 1.98));
+  txt("ひとつの種から", CX, CY + 360, { size: 24, fam: F.jp, weight: 500, align: "center", ls: 12, alpha: .7 * seg(t, 1.2, 1.5) * (1 - seg(t, 1.7, 1.9)) });
+}
+
+const GC = 1150; // composition centre x for the right-weighted scenes
+function sceneGolden(t) {
+  const u = t - 2.0;
+  const rot = u * .32 + 1.1 * eOutExpo(seg(u, 0, 1.6));
+  const tilt = 0.95 * eInOut(seg(u, 1.25, 2.2));
+  const drift = eInExpo(seg(u, 1.55, 2.3));
+  const coll = eInExpo(seg(u, 2.18, 2.5));
+  const ct = Math.cos(tilt), st = Math.sin(tilt);
+  const rr = 3.62 + drift * 0.38, it = Math.floor(u * 24);
+  c.globalCompositeOperation = "lighter";
+  for (let i = 1; i < NG; i++) {
+    const ts = 0.04 + 1.15 * Math.pow(i / NG, .62), p = eOutExpo(seg(u, ts, ts + .7));
+    if (p <= 0) continue;
+    // logistic flicker per leaf (golden-angle-drift): x ← r x (1 − x)
+    let lx = gX[i]; for (let k = 0; k < (it % 9) + 4; k++) lx = rr * lx * (1 - lx);
+    const th = i * GA + rot + drift * (lx - .5) * 1.6;
+    const r = 8.9 * Math.sqrt(i) * p * (1 + drift * (lx - .5) * .35);
+    let x = r * Math.cos(th), y = r * Math.sin(th), z = -0.0011 * r * r + 120;
+    const y2 = y * ct - z * st, z2 = y * st + z * ct, f = 1500 / (1500 + z2);
+    let sx = GC + x * f, sy = CY + y2 * f;
+    const lineX = rToX(R0 + (R1 - R0) * (i / NG)), lineY = CY;
+    sx = lerp(sx, lineX, coll); sy = lerp(sy, lineY, coll);
+    const breath = 1 + .32 * Math.sin(Math.PI * 2 * 1.6 * u - i * .016);
+    const s = (1.7 + .085 * Math.sqrt(i)) * breath * f * (1 - coll * .7);
+    const arm = (i % 34) / 34, arm21 = (i % 21) / 21;
+    const hl = seg(u, .9, 1.1) * (1 - seg(u, 1.55, 1.75));
+    const k = lerp(arm * .55 + i / NG * .45, arm21, hl);
+    c.globalAlpha = (.55 + .45 * p) * (hl > 0 && (i % 21) === (Math.floor(u * 14) % 21) ? 1 : .78);
+    c.fillStyle = col(k);
+    c.beginPath(); c.ellipse(sx, sy, s * (2 - coll), s * .72, th * (1 - coll), 0, Math.PI * 2); c.fill();
+  }
+  c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+  // readouts
+  const cnt = eOutExpo(seg(u, .15, 1.25));
+  const num = (GA_DEG * cnt).toFixed(6) + "°";
+  const fade = 1 - seg(u, 2.15, 2.4);
+  txt("GOLDEN ANGLE  ·  360° (1 − 1/φ)", 112, 812, { size: 18, color: C_PINK, alpha: fade * seg(u, .1, .3), ls: 3 });
+  txt(scramble(num, seg(u, .15, 1.0), t, 11), 104, 930, { size: 108, fam: F.disp, weight: 300, stretch: "expanded", alpha: fade, ls: -2 });
+  const hl = seg(u, .9, 1.1) * (1 - seg(u, 1.55, 1.75));
+  txt("θₙ = n · 137.508°    rₙ = c √n", 112, 978, { size: 18, alpha: .55 * fade * seg(u, .4, .6), ls: 1 });
+  if (hl > 0) txt("21 / 34 PARASTICHIES", GC + 400, CY + 420, { size: 16, alpha: hl * .9, ls: 3, align: "left", color: C_BLUE });
+  if (drift > .02) txt(`x ← ${rr.toFixed(3)} · x(1 − x)`, GC + 400, CY - 400, { size: 18, alpha: drift * fade, color: C_PINK, ls: 1 });
+}
+
+function sceneLogistic(t) {
+  const u = t - 4.5;
+  const z = 1 + 2.4 * eInOutExpo(seg(u, .95, 1.75)) + eInExpo(seg(u, 1.75, 2.0)) * 3.5;
+  const fx0 = rToX(3.5699), fy0 = xToY(0.5);
+  const e = eInOut(seg(u, .95, 1.75));
+  const tx = lerp(fx0, CX + 200, e), ty = lerp(fy0, CY, e);
+  const X = x => (x - fx0) * z + tx, Y = y => (y - fy0) * z + ty;
+  c.globalCompositeOperation = "lighter";
+  const sz = Math.min(3.2, 1.5 * Math.sqrt(z));
+  for (let ci = 0; ci < NC; ci++) {
+    const px = rToX(R0 + (R1 - R0) * ci / (NC - 1)), sx = X(px);
+    if (sx < -10 || sx > W + 10) continue;
+    const delay = (ci / NC) * .55, p = eOutExpo(seg(u, delay, delay + .55));
+    if (p <= 0) { c.globalAlpha = .7; c.fillStyle = col(ci / NC); c.fillRect(sx, Y(CY) - 1, sz, 2); continue; }
+    c.fillStyle = col(Math.pow(ci / NC, 1.4)); c.globalAlpha = .62;
+    for (let s = 0; s < NS; s++) { const y = lerp(CY, xToY(bY[ci * NS + s]), p); c.fillRect(sx, Y(y), sz, sz); }
+  }
+  c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+  // cursor sweeps to the Feigenbaum point
+  const cr = lerp(2.6, 3.569946, eOutExpo(seg(u, .35, 1.15)));
+  const cxp = X(rToX(cr));
+  const ca = seg(u, .3, .45);
+  if (ca > 0) {
+    c.globalAlpha = .9 * ca; c.fillStyle = C_PAPER; c.fillRect(cxp, 0, 1.5, H);
+    txt(`r = ${cr.toFixed(6)}`, cxp + 14, 150, { size: 20, alpha: ca, ls: 1 });
+    const per = cr < 3 ? "PERIOD 1" : cr < 3.44949 ? "PERIOD 2" : cr < 3.54409 ? "PERIOD 4" : cr < 3.5644 ? "PERIOD 8" : "r∞  ONSET OF CHAOS";
+    txt(per, cxp + 14, 178, { size: 16, alpha: ca * .8, color: cr > 3.565 ? C_PINK : C_BLUE, ls: 3 });
+    for (const [rv, lab] of [[3, "2"], [3.44949, "4"], [3.54409, "8"]]) { if (cr < rv) continue; const xx = X(rToX(rv));
+      c.globalAlpha = .5; c.fillStyle = C_PAPER; c.fillRect(xx, H - 140, 1, 24); txt(lab, xx + 6, H - 120, { size: 14, alpha: .7 }); }
+    c.globalAlpha = 1;
+  }
+  const da = seg(u, 1.05, 1.3) * (1 - seg(u, 1.8, 1.95));
+  txt("δ = 4.669201609…", cxp + 14, 214, { size: 20, alpha: da, color: C_PINK, ls: 1 });
+  txt("FEIGENBAUM CONSTANT", cxp + 14, 240, { size: 13, alpha: da * .6, ls: 3 });
+  // formula
+  reveal("x ← r x (1 − x)", 108, 400, { size: 96, fam: F.serif, weight: 400, style: "italic", stag: .03 }, seg(u, .1, .7), seg(u, 1.75, 1.95));
+  txt("LOGISTIC MAP  ·  r ∈ [2.6, 4.0]", 112, 444, { size: 16, alpha: .6 * seg(u, .4, .6) * (1 - seg(u, 1.7, 1.9)), ls: 3 });
+}
+
+function scenePendulum(t) {
+  const u = t - 6.5;
+  const simT = 2.5 + u * 4.8, idx = Math.min(PEND.N - 1, Math.floor(simT * PEND.RATE));
+  const L = 160, PX = GC, PY = CY;
+  const kal = eOutExpo(seg(u, .25, 1.1)), copies = 7;
+  const spin = u * .25;
+  const trail = Math.floor(3.2 * PEND.RATE), i0 = Math.max(0, idx - trail);
+  const CH_N = 16, chunk = Math.ceil((idx - i0) / CH_N);
+  const paths = arr => { const ps = []; for (let k = 0; k < CH_N; k++) { const a = i0 + k * chunk, b = Math.min(idx, a + chunk + 1); if (b - a < 2) { ps.push(null); continue; }
+      const p = new Path2D(); p.moveTo(arr[a*4+2] * L, arr[a*4+3] * L); for (let i = a + 1; i < b; i++) p.lineTo(arr[i*4+2] * L, arr[i*4+3] * L); ps.push(p); } return ps; };
+  const pa = paths(PEND.A), pb = paths(PEND.B);
+  c.globalCompositeOperation = "lighter"; c.lineJoin = "round"; c.lineCap = "round";
+  for (let m = 0; m < copies * 2; m++) {
+    const isMain = m === 0, a = isMain ? 1 : kal * .7;
+    if (a <= 0.01) continue;
+    const ang = spin + Math.floor(m / 2) * Math.PI * 2 / copies, mir = m % 2 ? -1 : 1;
+    const sca = isMain ? 1 : lerp(.6, 1, kal);
+    c.setTransform(Math.cos(ang) * sca * mir, Math.sin(ang) * sca * mir, -Math.sin(ang) * sca, Math.cos(ang) * sca, PX + gfx.sx, PY + gfx.sy);
+    for (let k = 0; k < CH_N; k++) { const al = Math.pow((k + 1) / CH_N, 1.6) * a;
+      c.lineWidth = (isMain ? 2.6 : 1.6) / sca;
+      if (pa[k]) { c.globalAlpha = al; c.strokeStyle = C_BLUE; c.stroke(pa[k]); }
+      if (pb[k]) { c.globalAlpha = al; c.strokeStyle = C_PINK; c.stroke(pb[k]); } }
+  }
+  c.setTransform(1, 0, 0, 1, gfx.sx, gfx.sy);
+  c.globalCompositeOperation = "source-over"; c.globalAlpha = 1;
+  // arms
+  const arms = (arr, colr, w) => { const x1 = arr[idx*4] * L + PX, y1 = arr[idx*4+1] * L + PY, x2 = arr[idx*4+2] * L + PX, y2 = arr[idx*4+3] * L + PY;
+    c.strokeStyle = colr; c.lineWidth = w; c.beginPath(); c.moveTo(PX, PY); c.lineTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    c.fillStyle = colr; c.beginPath(); c.arc(x1, y1, w * 3, 0, 7); c.fill(); c.beginPath(); c.arc(x2, y2, w * 4, 0, 7); c.fill(); return [x2, y2]; };
+  const armA = 1 - seg(u, 1.9, 2.3);
+  c.globalAlpha = armA * .8; arms(PEND.B, C_PINK, 1.5); c.globalAlpha = armA; const tip = arms(PEND.A, C_PAPER, 2.2);
+  c.fillStyle = C_PAPER; c.beginPath(); c.arc(PX, PY, 4, 0, 7); c.fill(); c.globalAlpha = 1;
+  // live divergence readout (true distance between tips, in arm lengths)
+  const dx = PEND.A[idx*4+2] - PEND.B[idx*4+2], dy = PEND.A[idx*4+3] - PEND.B[idx*4+3], dist = Math.hypot(dx, dy);
+  const ra = seg(u, .3, .5) * (1 - seg(u, 2.3, 2.45));
+  txt("Δθ₀ = 1.0 × 10⁻⁸ rad", 112, 820, { size: 20, alpha: ra, ls: 1 });
+  txt(`|Δ| = ${dist.toExponential(2)}`, 112, 856, { size: 20, alpha: ra, color: dist > 0.05 ? C_PINK : C_BLUE, ls: 1 });
+  txt(`t = ${simT.toFixed(2)} s   ·   RK4   dt = 1/2400 s`, 112, 892, { size: 16, alpha: ra * .55, ls: 1 });
+  txt("SAME EQUATION, TWO STARTS", 112, 780, { size: 14, alpha: ra * .7, ls: 4, color: C_BLUE });
+  if (tip) txt("+ ghost", tip[0] + 16, tip[1] - 12, { size: 13, alpha: ra * .6 * armA, color: C_PINK });
+  // CHAOS stamp the instant the two trajectories split
+  const hp = seg(t, 8.6, 8.66);
+  if (hp > 0) {
+    const out = seg(t, 8.9, 9.0);
+    c.save();
+    font(300, F.disp, 900, "ultra-expanded"); c.textAlign = "center"; c.textBaseline = "middle";
+    const bands = 9;
+    for (let b = 0; b < bands; b++) { const y0 = CY - 150 + b * 300 / bands;
+      c.save(); c.beginPath(); c.rect(0, y0, W, 300 / bands + 1); c.clip();
+      const off = (hash(b * 3.3 + Math.floor(t * 30)) - .5) * 120 * (1 - seg(t, 8.62, 8.8));
+      c.globalAlpha = (1 - out) * .95; c.fillStyle = C_PAPER; c.fillText("CHAOS", CX + off, CY + 10 * (1 - eOutExpo(seg(t, 8.6, 8.8)))); c.restore(); }
+    c.restore();
+    txt("is deterministic.", CX, CY + 210, { size: 56, fam: F.serif, style: "italic", align: "center", alpha: seg(t, 8.68, 8.78) * (1 - out), color: C_PINK });
+  }
+}
+
+let iconXf = t => { // shared transform for the hero icon (petals inherit it)
+  const u = t - 10.0; return { x: GC, y: CY, s: 980 * (1 + .14 * (1 - eOutExpo(seg(u, 0, .7)))), r: t * .12 }; };
+function sceneIcons(t) {
+  const segs = [[9.0, 9.5, 0], [9.5, 10.0, 1], [10.0, 11.5, 2]];
+  for (const [a, b, i] of segs) { if (t < a || t >= b) continue;
+    const ic = ICONS[i], u = t - a;
+    const k = i === 2 ? ic.n * Math.pow(seg(u, 0, 1.0), 1.7) + 3000 : ic.n * Math.pow(seg(u, 0, .42), 1.5) + 3000;
+    const img = iconImage(ic, k);
+    let x = GC, y = CY, s = 900 * (1 + .18 * (1 - eOutExpo(seg(u, 0, .45)))), r = t * .12;
+    if (i === 2) { const xf = iconXf(t); x = xf.x; y = xf.y; s = xf.s; r = xf.r; }
+    const fade = i === 2 ? 1 - eInOut(seg(t, 10.85, 11.3)) : 1;
+    c.save(); c.globalCompositeOperation = "lighter"; c.globalAlpha = fade;
+    c.translate(x, y); c.rotate(r); c.imageSmoothingEnabled = true; c.drawImage(img, -s / 2, -s / 2, s, s); c.restore();
+    // parameter readout for the current icon
+    const [l, al, be, ga, om, n] = ic.p;
+    const pa = seg(u, 0, .15) * (i === 2 ? 1 - seg(t, 10.3, 10.4) : 1);
+    txt(scramble(`λ ${l}   α ${al}   β ${be}   γ ${ga}   ω ${om}   n ${n}`, seg(u, 0, .3), t, i), 112, 900, { size: 18, alpha: pa, ls: 1 });
+    txt(ic.sym + " SYMMETRY", 112, 860, { size: 16, alpha: pa * .9, color: C_PINK, ls: 4 });
+    txt(`${(k | 0).toLocaleString("en-US")} iterations`, 112, 936, { size: 15, alpha: pa * .55, ls: 1 });
+  }
+  const fa = seg(t, 9.1, 9.3) * (1 - seg(t, 10.3, 10.4));
+  txt("z ← (λ + α|z|² + β Re zⁿ + iω) z + γ z̄ⁿ⁻¹", 112, 980, { size: 18, alpha: fa * .6, ls: 1 });
+  // petals: sampled from the hero's density, released at 10.85 (咲く・散る)
+  if (t >= 10.85) petals(t, 1 - seg(t, 11.5, 12.15));
+  // thesis title
+  const tp = seg(t, 10.36, 10.9), to = seg(t, 11.12, 11.35);
+  if (tp > 0 && to < 1) {
+    c.save(); c.globalAlpha = .55 * (1 - to); c.fillStyle = "#07070b"; c.fillRect(0, CY - 150, W, 280); c.restore();
+    reveal("ORDER", CX - 90, CY + 70, { size: 170, fam: F.disp, weight: 900, stretch: "ultra-expanded", align: "right", stag: .06 }, tp, to);
+    reveal("CHAOS", CX + 90, CY + 70, { size: 170, fam: F.disp, weight: 900, stretch: "ultra-expanded", align: "left", stag: .06 }, seg(t, 10.42, 10.95), to);
+    const xs = eOutBack(seg(t, 10.38, 10.7)) * (1 - eInExpo(to));
+    if (xs > 0) { c.save(); c.translate(CX, CY + 18); c.scale(xs, xs); c.rotate((1 - xs) * 2);
+      txt("×", 0, 52, { size: 220, fam: F.serif, style: "italic", align: "center", color: C_PINK }); c.restore(); }
+  }
+}
+function petalPos(i, t) {
+  const xf = iconXf(10.85), cs = Math.cos(xf.r), sn = Math.sin(xf.r);
+  const px = P0[i*2] * xf.s, py = P0[i*2+1] * xf.s;
+  const x0 = xf.x + px * cs - py * sn, y0 = xf.y + px * sn + py * cs;
+  const tau = Math.max(0, t - 10.85 - PV[i*4+3] * .18), ang = Math.atan2(y0 - CY, x0 - xf.x);
+  const sp = 160 + PV[i*4] * 420;
+  const x = x0 + Math.cos(ang) * sp * tau + 260 * tau * tau * (PV[i*4+1] - .2) + 60 * vnoise(i * .37 + tau * 2.2) * tau;
+  const y = y0 + Math.sin(ang) * sp * tau + 180 * tau * tau + 60 * vnoise(i * .91 + 50 + tau * 2.2) * tau;
+  return [x, y, tau];
+}
+function petals(t, alpha) {
+  if (alpha <= 0) return;
+  c.globalCompositeOperation = "lighter";
+  for (let i = 0; i < NP; i++) { const [x, y, tau] = petalPos(i, t), spin = tau * (4 + PV[i*4+2] * 8) + i;
+    const s = 2.2 + PV[i*4+2] * 3.2;
+    c.globalAlpha = alpha * .75 * Math.min(1, tau * 8 + .3); c.fillStyle = col(.55 + PV[i*4+1] * .45);
+    c.beginPath(); c.ellipse(x, y, s * 1.8, s * Math.abs(Math.cos(spin)) + .4, spin * .7, 0, 7); c.fill(); }
+  c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+}
+
+function sceneVase(t) {
+  const u = t - 11.5, m = eInOut(seg(t, 11.5, 12.15)), imp = eInExpo(seg(t, 12.62, 13.0));
+  const ry = t * .9 + eInExpo(seg(t, 12.4, 13.0)) * 6, pitch = .38, cy = Math.cos(ry), sy = Math.sin(ry), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const VX = GC + 40, VY = CY + 10, scale = (1 + .1 * eOutCubic(seg(u, 0, 1.2))) * (1 - imp);
+  const proj = new Float32Array(NP * 3);
+  for (let i = 0; i < NP; i++) {
+    const x = V3[i*3], y = V3[i*3+1], z = V3[i*3+2];
+    const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+    const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp, f = 1300 / (1300 + z2);
+    proj[i*3] = VX + x1 * f * scale; proj[i*3+1] = VY + y2 * f * scale; proj[i*3+2] = z2;
+  }
+  c.globalCompositeOperation = "lighter";
+  // contour rings (cross-sections), as in the generator's preview
+  const ra = seg(t, 11.95, 12.3) * (1 - imp);
+  if (ra > 0) for (let iz = 0; iz < VZ; iz += 4) { c.beginPath();
+    for (let it = 0; it <= VT; it++) { const i = iz * VT + (it % VT); it ? c.lineTo(proj[i*3], proj[i*3+1]) : c.moveTo(proj[i*3], proj[i*3+1]); }
+    c.globalAlpha = ra * .55; c.strokeStyle = col(1 - iz / VZ); c.lineWidth = 1.2; c.stroke(); }
+  for (let i = 0; i < NP; i++) {
+    let x = proj[i*3], y = proj[i*3+1];
+    if (m < 1) { const [px, py] = petalPos(i, Math.min(t, 11.55)); x = lerp(px, x, m); y = lerp(py, y, m); }
+    const back = proj[i*3+2] > 0 ? .45 : 1;
+    c.globalAlpha = (.5 + .5 * m) * back * (1 - imp * .5); c.fillStyle = col(1 - (i / VT | 0) / VZ);
+    const s = 2.1 * (1 - imp * .6); c.fillRect(x - s / 2, y - s / 2, s, s);
+  }
+  c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+  const fa = seg(t, 11.8, 12.05) * (1 - seg(t, 12.6, 12.85));
+  txt("r(θ, z) = R₀(z) · (1 + A · W(n(θ + τ(z))))", 112, 860, { size: 18, alpha: fa, ls: 1 });
+  txt("n = 6  ·  τ = −122°  ·  PETAL WAVE", 112, 896, { size: 16, alpha: fa * .7, color: C_PINK, ls: 2 });
+  txt("PLA  ·  Ø 0.4 mm NOZZLE  ·  SPIRAL VASE  ·  OVERHANG ≤ 45°", 112, 930, { size: 14, alpha: fa * .5, ls: 2 });
+  reveal("EQUATION → OBJECT", 108, 400, { size: 64, fam: F.serif, style: "italic", stag: .025 }, seg(t, 11.75, 12.25), seg(t, 12.6, 12.85));
+}
+
+function sceneEnd(t) {
+  const u = t - 13.0;
+  // phyllotaxis mark: 377 seeds unfolding, breathing (a Fibonacci number of them)
+  const MX = 1500, MY = CY, N = 377;
+  c.globalCompositeOperation = "lighter";
+  for (let i = 1; i < N; i++) {
+    const ts = .02 + .7 * Math.pow(i / N, .7), p = eOutBack(seg(u, ts, ts + .55));
+    if (p <= 0) continue;
+    const th = i * GA + u * .22, r = 15.6 * Math.sqrt(i) * p;
+    const s = (1.6 + .16 * Math.sqrt(i)) * (1 + .25 * Math.sin(u * 5 - i * .05));
+    c.globalAlpha = .9; c.fillStyle = col((i % 34) / 34 * .6 + i / N * .4);
+    c.beginPath(); c.ellipse(MX + r * Math.cos(th), MY + r * Math.sin(th), s * 1.9, s * .8, th, 0, 7); c.fill();
+  }
+  c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+  // lock-up
+  txt(scramble("PORTFOLIO REEL — 2026", seg(u, .08, .5), t, 21), 150, 380, { size: 18, color: C_PINK, ls: 5, alpha: seg(u, .05, .15) });
+  reveal(NAME, 144, 540, { size: 158, fam: F.disp, weight: 900, stretch: "ultra-expanded", ls: 4, stag: .06 }, seg(u, .12, .75));
+  reveal("Generative Motion Design", 150, 622, { size: 60, fam: F.serif, style: "italic", stag: .015, color: C_PAPER }, seg(u, .4, 1.0));
+  txt("数式に宿る、自然のかたち。", 152, 690, { size: 26, fam: F.jp, weight: 500, ls: 8, alpha: .85 * eOutCubic(seg(u, .65, 1.05)) });
+  c.globalAlpha = .5; c.fillStyle = C_PAPER; c.fillRect(152, 740, 760 * eOutExpo(seg(u, .7, 1.3)), 1); c.globalAlpha = 1;
+  const works = ["GENERATIVE FLOWER", "DOUBLE PENDULUM", "GOLDEN ANGLE", "ORDER × CHAOS", "BAMBOO VASE"];
+  let wx = 152;
+  font(15, F.mono); c.letterSpacing = "2px";
+  const ws = works.map(w => c.measureText(w).width + 2 * w.length);
+  works.forEach((w, i) => { const a = seg(u, .85 + i * .08, 1.05 + i * .08);
+    txt(scramble(w, a, t, i * 9), wx, 784, { size: 15, ls: 2, alpha: a ? .75 : 0 }); wx += ws[i] + 34;
+    if (i < works.length - 1) txt("·", wx - 20, 784, { size: 15, alpha: a * .5 }); });
+  txt(scramble("github.com/York-14", seg(u, 1.25, 1.6), t, 41), 152, 830, { size: 18, color: C_BLUE, ls: 2, alpha: seg(u, 1.2, 1.3) });
+}
+
+// ───────────────────────────────────────────────────────────── HUD
+function hud(t) {
+  const a = eOutCubic(seg(t, .15, .7));
+  c.globalAlpha = .55 * a; c.strokeStyle = C_PAPER; c.lineWidth = 1.5;
+  const m = 40, L = 26;
+  c.beginPath();
+  c.moveTo(m, m + L); c.lineTo(m, m); c.lineTo(m + L, m);
+  c.moveTo(W - m - L, m); c.lineTo(W - m, m); c.lineTo(W - m, m + L);
+  c.moveTo(m, H - m - L); c.lineTo(m, H - m); c.lineTo(m + L, H - m);
+  c.moveTo(W - m - L, H - m); c.lineTo(W - m, H - m); c.lineTo(W - m, H - m - L);
+  c.stroke(); c.globalAlpha = 1;
+  let ci = 0; for (let i = 0; i < CH.length; i++) if (t >= CH[i].t) ci = i;
+  const ch = CH[ci], since = t - ch.t;
+  txt(`${NAME}  ·  MOTION REEL`, 80, 78, { size: 15, ls: 3, alpha: .7 * a });
+  const label = ci < 6 ? `${String(ci + 1).padStart(2, "0")} / 06   ${ch.n}` : "06 / 06   CREDITS";
+  txt(scramble(label, seg(since, 0, .35), t, ci * 13), W - 80, 78, { size: 15, ls: 3, alpha: .8 * a, align: "right" });
+  const fr = Math.floor(t * FPS), tc = `${String(Math.floor(fr / FPS)).padStart(2, "0")}:${String(fr % FPS).padStart(2, "0")}`;
+  txt(`TC ${tc}`, 80, H - 66, { size: 15, ls: 3, alpha: .7 * a });
+  txt("1920 × 1080  ·  60 FPS  ·  SEED 0x9E3779B9", W - 80, H - 66, { size: 15, ls: 3, alpha: .55 * a, align: "right" });
+  // progress rule with chapter ticks
+  const x0 = 80, x1 = W - 80, y = H - 48;
+  c.globalAlpha = .18 * a; c.fillStyle = C_PAPER; c.fillRect(x0, y, x1 - x0, 1);
+  c.globalAlpha = .85 * a; c.fillStyle = C_PINK; c.fillRect(x0, y - .5, (x1 - x0) * (t / DUR), 2);
+  c.fillStyle = C_PAPER; for (const k of CH) { c.globalAlpha = (t >= k.t ? .8 : .3) * a; c.fillRect(x0 + (x1 - x0) * k.t / DUR, y - 4, 1, 9); }
+  c.globalAlpha = 1;
+}
+
+// ───────────────────────────────────────────────────────────── frame
+let gfx = fx(0);
+function drawScene(t) {
+  gfx = fx(t);
+  c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+  c.fillStyle = "#050508"; c.fillRect(0, 0, W, H);
+  c.setTransform(1, 0, 0, 1, gfx.sx, gfx.sy);
+  if (t < 2.0) sceneSeed(t);
+  else if (t < 4.5) sceneGolden(t);
+  else if (t < 6.5) sceneLogistic(t);
+  else if (t < 9.0) scenePendulum(t);
+  else if (t < 11.5) sceneIcons(t);
+  else if (t < 13.0) { if (t < 12.15) petals(t, 0); sceneVase(t); }
+  else sceneEnd(t);
+  for (let i = 1; i < 6; i++) narrative(t, i);
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  hud(t);
+}
+
+// ───────────────────────────────────────────────────────────── post (WebGL2)
+const gl = out.getContext("webgl2", { preserveDrawingBuffer: true, antialias: false, alpha: false });
+let post = null;
+if (gl) {
+  const vs = `#version 300 es
+  in vec2 p; out vec2 vUv; void main(){ vUv = p * .5 + .5; vUv.y = 1. - vUv.y; gl_Position = vec4(p, 0, 1); }`;
+  const fs = `#version 300 es
+  precision highp float;
+  uniform sampler2D T; uniform float uTime, uAberr, uFlash, uZoom, uGlitch, uBloom; uniform vec2 uC;
+  in vec2 vUv; out vec4 o;
+  float h(float n){ return fract(sin(n * 91.345) * 47453.5453); }
+  vec3 chroma(vec2 uv){ vec2 d = uv - .5;
+    return vec3(texture(T, uv + d * uAberr).r, texture(T, uv).g, texture(T, uv - d * uAberr).b); }
+  vec3 blm(vec2 uv, float l){ vec2 px = vec2(1./1920., 1./1080.) * exp2(l);
+    return (textureLod(T, uv + px * vec2(.5,.5), l).rgb + textureLod(T, uv + px * vec2(-.5,.5), l).rgb
+          + textureLod(T, uv + px * vec2(.5,-.5), l).rgb + textureLod(T, uv + px * vec2(-.5,-.5), l).rgb) * .25; }
+  void main(){
+    vec2 uv = vUv;
+    if (uGlitch > 0.) { float band = floor(uv.y * 34. + floor(uTime * 30.) * 7.);
+      if (h(band) < uGlitch * .55) uv.x += (h(band + 3.1) - .5) * .09 * uGlitch; }
+    vec2 dir = uv - uC; vec3 col = vec3(0);
+    for (int i = 0; i < 12; i++) { float s = 1. - uZoom * float(i) / 11.; col += chroma(uC + dir * s); }
+    col /= 12.;
+    vec3 b = blm(uv, 2.) * .35 + blm(uv, 3.) * .55 + blm(uv, 4.) * .7 + blm(uv, 5.) * .8 + blm(uv, 6.) * .6;
+    col += b * .42 * uBloom;
+    col += uFlash * vec3(1., .95, .98);
+    float v = smoothstep(1.3, .25, length((vUv - .5) * vec2(1.55, 1.)));
+    col *= mix(.6, 1., v);
+    col += (h(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233)) + fract(uTime * 7.31)) - .5) * .035;
+    o = vec4(clamp(col, 0., 1.), 1.);
+  }`;
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr); gl.useProgram(pr);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const U = n => gl.getUniformLocation(pr, n);
+  post = { tex, u: { uTime: U("uTime"), uAberr: U("uAberr"), uFlash: U("uFlash"), uZoom: U("uZoom"), uGlitch: U("uGlitch"), uBloom: U("uBloom"), uC: U("uC") } };
+}
+const out2d = gl ? null : out.getContext("2d");
+function render(t) {
+  t = clamp(t, 0, DUR - 1e-4);
+  drawScene(t);
+  if (post) {
+    gl.viewport(0, 0, W, H);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sc); gl.generateMipmap(gl.TEXTURE_2D);
+    gl.uniform1f(post.u.uTime, t); gl.uniform1f(post.u.uAberr, gfx.aberr); gl.uniform1f(post.u.uFlash, gfx.flash);
+    gl.uniform1f(post.u.uZoom, gfx.zoom); gl.uniform1f(post.u.uGlitch, gfx.glitch); gl.uniform1f(post.u.uBloom, gfx.bloom);
+    gl.uniform2f(post.u.uC, t > 12.4 && t < 13.2 ? (GC + 40) / W : .5, .5);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  } else out2d.drawImage(sc, 0, 0);
+}
+
+// ───────────────────────────────────────────────────────────── sound (Web Audio, offline-rendered from the same timeline)
+async function buildAudio(sr = 48000) {
+  const ac = new OfflineAudioContext(2, Math.ceil(sr * DUR), sr);
+  const master = ac.createDynamicsCompressor(); master.threshold.value = -14; master.ratio.value = 4; master.attack.value = .004; master.release.value = .18;
+  const mg = ac.createGain(); mg.gain.value = .62; master.connect(mg); mg.connect(ac.destination);
+  // reverb send
+  const ir = ac.createBuffer(2, sr * 2.6, sr); const rr = mulberry32(7);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = (rr() * 2 - 1) * Math.pow(1 - i / d.length, 3.2); }
+  const verb = ac.createConvolver(); verb.buffer = ir; const vg = ac.createGain(); vg.gain.value = .32; verb.connect(vg); vg.connect(master);
+  const noise = ac.createBuffer(1, sr * 2, sr); { const d = noise.getChannelData(0), q = mulberry32(3); for (let i = 0; i < d.length; i++) d[i] = q() * 2 - 1; }
+  const out = (node, gain = 1, pan = 0, send = 0) => { const g = ac.createGain(); g.gain.value = gain; const p = ac.createStereoPanner(); p.pan.value = pan;
+    node.connect(g); g.connect(p); p.connect(master); if (send) { const s = ac.createGain(); s.gain.value = send; p.connect(s); s.connect(verb); } return g; };
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  function kick(t, amp = 1, big = false) {
+    const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(big ? 120 : 150, t); o.frequency.exponentialRampToValueAtTime(big ? 32 : 45, t + (big ? .5 : .16));
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp, t + .003); g.gain.exponentialRampToValueAtTime(.001, t + (big ? 1.4 : .42));
+    o.connect(g); out(g, .95); o.start(t); o.stop(t + 1.6);
+    const n = ac.createBufferSource(), f = ac.createBiquadFilter(), ng = ac.createGain(); n.buffer = noise; f.type = "highpass"; f.frequency.value = big ? 900 : 2500;
+    ng.gain.setValueAtTime(amp * (big ? .5 : .18), t); ng.gain.exponentialRampToValueAtTime(.001, t + (big ? .5 : .05)); n.connect(f); f.connect(ng); out(ng, 1, 0, big ? .8 : .1); n.start(t, (t * 7) % 1); n.stop(t + .6);
+  }
+  function hat(t, amp, open = false, pan = 0) { const n = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    n.buffer = noise; f.type = "highpass"; f.frequency.value = 7800; g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(.001, t + (open ? .22 : .035));
+    n.connect(f); f.connect(g); out(g, .5, pan, .05); n.start(t, (t * 13) % 1.5); n.stop(t + .3); }
+  function riser(t0, t1, amp = .5) { const n = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); n.buffer = noise; n.loop = true;
+    f.type = "bandpass"; f.Q.value = 3; f.frequency.setValueAtTime(300, t0); f.frequency.exponentialRampToValueAtTime(9000, t1);
+    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(amp, t1 - .01); g.gain.linearRampToValueAtTime(0, t1 + .01);
+    n.connect(f); f.connect(g); out(g, 1, 0, .4); n.start(t0); n.stop(t1 + .05); }
+  function pluck(t, m, amp = .18, pan = 0, dec = .35, type = "triangle") { const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
+    o.type = type; o.frequency.value = mtof(m); f.type = "lowpass"; f.frequency.setValueAtTime(5000, t); f.frequency.exponentialRampToValueAtTime(600, t + dec);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp, t + .004); g.gain.exponentialRampToValueAtTime(.001, t + dec);
+    o.connect(f); f.connect(g); out(g, 1, pan, .45); o.start(t); o.stop(t + dec + .05); }
+  function pad(t0, t1, notes, amp = .05, cut0 = 400, cut1 = 2400) {
+    const f = ac.createBiquadFilter(), g = ac.createGain(); f.type = "lowpass"; f.Q.value = 2;
+    f.frequency.setValueAtTime(cut0, t0); f.frequency.exponentialRampToValueAtTime(cut1, t1);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(amp, t0 + .25); g.gain.setValueAtTime(amp, t1 - .2); g.gain.linearRampToValueAtTime(0, t1 + .05);
+    f.connect(g); out(g, 1, 0, .6);
+    notes.forEach((m, i) => { for (const det of [-7, 7]) { const o = ac.createOscillator(); o.type = "sawtooth"; o.frequency.value = mtof(m); o.detune.value = det + i;
+      const og = ac.createGain(); og.gain.value = 1 / notes.length; o.connect(og); og.connect(f); o.start(t0); o.stop(t1 + .1); } });
+  }
+  function sub(t0, t1, m, amp = .22) { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = mtof(m);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(amp, t0 + .05); g.gain.setValueAtTime(amp, t1 - .1); g.gain.linearRampToValueAtTime(0, t1); o.connect(g); out(g); o.start(t0); o.stop(t1 + .05); }
+  function blip(t, f0, amp = .08, pan = 0) { const o = ac.createOscillator(), g = ac.createGain(); o.type = "square"; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * .5, t + .05);
+    g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(.001, t + .06); o.connect(g); out(g, 1, pan, .2); o.start(t); o.stop(t + .08); }
+
+  // SEED: a heartbeat and a high shimmer
+  pad(0, 2.0, [74, 81, 86], .025, 300, 1800);
+  kick(.5, .55); kick(1.0, .35); kick(1.5, .4); kick(1.75, .3);
+  riser(1.1, 2.0, .35);
+  // GOLDEN ANGLE: pentatonic plucks chosen by n·φ (mod 1), getting denser
+  pad(2.0, 4.5, [50, 57, 64, 66, 73], .05, 350, 2600); sub(2.0, 4.5, 38);
+  const penta = [62, 64, 66, 69, 71, 74, 76, 78, 81, 83];
+  for (let s = 0; s < 40; s++) { const t = 2.0 + s * .0625; if (t >= 4.45) break; if (s < 8 && s % 2) continue;
+    const k = Math.floor(fract(s * 0.6180339887) * penta.length); pluck(t, penta[k], .13, Math.sin(s * GA) * .7, .3); }
+  for (const t of [2.0, 2.5, 3.0, 3.5, 4.0]) kick(t, t === 2.0 ? 1 : .7, t === 2.0);
+  for (let s = 0; s < 20; s++) hat(2.0 + s * .125 + .0625, s % 2 ? .25 : .15, false, .3);
+  riser(3.7, 4.5, .45);
+  // LOGISTIC MAP: the map itself, sonified. r sweeps 2.8 → 4.0: one pitch, then 2, 4, 8, then chaos.
+  pad(4.5, 6.5, [47, 54, 61, 62, 66], .045, 500, 3200); sub(4.5, 6.5, 35);
+  { let x = .4; for (let s = 0; s < 32; s++) { const t = 4.5 + s * .0625, r = 2.8 + 1.2 * Math.pow(s / 31, 1.3);
+      for (let k = 0; k < 3; k++) x = r * x * (1 - x); x = r * x * (1 - x);
+      pluck(t, 64 + Math.round(x * 24), .12, (x - .5) * 1.4, .18, "square"); } }
+  for (const t of [4.5, 5.0, 5.5, 6.0]) kick(t, t === 4.5 ? .95 : .7, t === 4.5);
+  for (let s = 0; s < 16; s++) hat(4.5 + s * .125 + .0625, .22, s % 4 === 3, -.3);
+  riser(5.7, 6.5, .55);
+  // DOUBLE PENDULUM: tension, then the split at 8.6
+  pad(6.5, 8.6, [43, 50, 57, 58, 62], .05, 300, 1400); sub(6.5, 8.6, 31, .25);
+  for (const t of [6.5, 7.0, 7.5, 8.0, 8.25]) kick(t, t === 6.5 ? 1 : .65, t === 6.5);
+  for (let s = 0; s < 34; s++) { const t = 6.5 + s * .0625; if (t > 8.55) break; hat(t, .1 + .14 * (s % 4 === 2), false, Math.sin(s) * .5); }
+  for (let s = 0; s < 14; s++) blip(6.6 + s * .14 + hash(s) * .05, 600 + hash(s + 3) * 1800, .05, hash(s + 9) * 2 - 1);
+  riser(7.9, 8.6, .6);
+  kick(8.6, 1.1, true);
+  for (let s = 0; s < 10; s++) blip(8.6 + s * .03, 200 + hash(s * 5) * 3000, .07, hash(s) * 2 - 1);
+  // SYMMETRIC ICONS: three cuts, then the bloom chord
+  pad(9.0, 11.5, [43, 50, 54, 57, 62, 66], .055, 600, 4000); sub(9.0, 11.5, 31, .22);
+  for (const t of [9.0, 9.5, 10.0]) { kick(t, .9, t === 9.0); pluck(t, 74 + (t - 9) * 4, .14, 0, .6, "sine"); }
+  for (let s = 0; s < 12; s++) hat(9.0 + s * .125 + .0625, .2, false, .2);
+  kick(10.38, 1, true); for (const m of [74, 78, 81, 85, 90]) pluck(10.38, m, .07, 0, 1.2, "sine");
+  for (let s = 0; s < 14; s++) pluck(10.9 + s * .04, 86 + (s * 5) % 12, .045, Math.sin(s * 2) * .8, .25, "sine");
+  riser(10.8, 11.5, .45);
+  // VASE: steady pulse, then the implosion
+  pad(11.5, 13.0, [50, 57, 62, 64, 69], .05, 700, 2000); sub(11.5, 13.0, 38, .2);
+  for (const t of [11.5, 12.0, 12.5]) kick(t, t === 11.5 ? .9 : .7, t === 11.5);
+  for (let s = 0; s < 12; s++) hat(11.5 + s * .125, s % 2 ? .22 : .1, s === 7, -.2);
+  riser(12.1, 13.0, .8);
+  // END: the boom and an open chord that rings out
+  kick(13.0, 1.25, true); sub(13.0, 15.0, 26, .26);
+  pad(13.0, 15.0, [50, 57, 64, 66, 69, 73, 76], .06, 3000, 900);
+  [62, 69, 74, 78, 81].forEach((m, i) => pluck(13.15 + i * .18, m + 12, .07, (i - 2) * .3, 1.2, "sine"));
+  return ac.startRendering();
+}
+function wavBase64(buf) {
+  const ch = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate, data = new DataView(new ArrayBuffer(44 + len * ch * 2));
+  const ws = (o, s) => { for (let i = 0; i < s.length; i++) data.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, "RIFF"); data.setUint32(4, 36 + len * ch * 2, true); ws(8, "WAVE"); ws(12, "fmt "); data.setUint32(16, 16, true); data.setUint16(20, 1, true);
+  data.setUint16(22, ch, true); data.setUint32(24, sr, true); data.setUint32(28, sr * ch * 2, true); data.setUint16(32, ch * 2, true); data.setUint16(34, 16, true);
+  ws(36, "data"); data.setUint32(40, len * ch * 2, true);
+  const chans = [...Array(ch)].map((_, i) => buf.getChannelData(i)); let o = 44;
+  for (let i = 0; i < len; i++) for (let k = 0; k < ch; k++) { data.setInt16(o, clamp(chans[k][i], -1, 1) * 32767, true); o += 2; }
+  const bytes = new Uint8Array(data.buffer); let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+// ───────────────────────────────────────────────────────────── player
+const JP_TEXT = CH.map(c => c.jp).join("") + "ひとつの種から数式に宿る、自然のかたち。";
+const fontsReady = Promise.all([
+  document.fonts.load('900 100px "Archivo"'), document.fonts.load('300 100px "Archivo"'), document.fonts.load('800 100px "Archivo"'),
+  document.fonts.load('italic 400 100px "Instrument Serif"'), document.fonts.load('400 100px "Instrument Serif"'),
+  document.fonts.load('400 20px "JetBrains Mono"', "SEED 0x9E3779B9 λαβγωθφδΔ←×·√∞⁻⁸₀²³ⁿ¹|z̄−→Ø≤"), document.fonts.load('500 20px "Zen Kaku Gothic New"', JP_TEXT),
+]).catch(() => {});
+
+window.REEL = { DUR, FPS, render, ready: false, buildAudio, wavBase64 };
+const ui = { play: document.getElementById("play"), big: document.getElementById("bigPlay"), scrub: document.getElementById("scrub"),
+             tc: document.getElementById("tc"), sound: document.getElementById("sound"), chapters: document.getElementById("chapters"), loading: document.getElementById("loading") };
+let playing = false, t0 = 0, startAt = 0, actx = null, abuf = null, src = null, soundOn = true, cur = 10.45;
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+CH.slice(0, 6).forEach((ch, i) => { const li = document.createElement("li"); li.innerHTML =
+  `<button type="button"><span class="n">${String(i + 1).padStart(2, "0")} · ${ch.t.toFixed(1)}s</span><span class="t">${ch.n}</span><span class="s">${ch.jp}</span></button>`;
+  li.querySelector("button").addEventListener("click", () => seek(ch.t + .001)); ui.chapters.appendChild(li); });
+function setChapter(t) { [...ui.chapters.children].forEach((li, i) => li.classList.toggle("on", t >= CH[i].t && t < CH[i + 1].t)); }
+function show(t) { cur = t; render(t); ui.scrub.value = t; const f = Math.floor(t * FPS); ui.tc.textContent = `${String(Math.floor(f / FPS)).padStart(2, "0")}:${String(f % FPS).padStart(2, "0")}`; setChapter(t); }
+function startSound(at) { stopSound(); if (!soundOn || !actx || !abuf) return; src = actx.createBufferSource(); src.buffer = abuf; src.connect(actx.destination); src.start(0, at); }
+function stopSound() { if (src) { try { src.stop(); } catch (e) {} src = null; } }
+function clock() { return actx && soundOn ? actx.currentTime : performance.now() / 1000; }
+async function play() {
+  if (!actx && soundOn) { try { actx = new AudioContext(); abuf = abuf || await buildAudio(actx.sampleRate); } catch (e) { soundOn = false; syncSoundBtn(); } }
+  if (actx && actx.state === "suspended") await actx.resume();
+  if (cur >= DUR - .02) cur = 0;
+  playing = true; startAt = cur; t0 = clock(); startSound(cur); ui.play.textContent = "Pause"; ui.big.hidden = true; requestAnimationFrame(tick);
+}
+function pause() { playing = false; stopSound(); ui.play.textContent = "Play"; }
+function seek(t) { const was = playing; if (was) pause(); show(t); if (was) play(); }
+function tick() { if (!playing) return; const t = startAt + (clock() - t0);
+  if (t >= DUR) { show(DUR - 1e-3); pause(); ui.big.hidden = false; return; }
+  show(t); requestAnimationFrame(tick); }
+function syncSoundBtn() { ui.sound.setAttribute("aria-pressed", String(soundOn)); ui.sound.textContent = soundOn ? "Sound on" : "Sound off"; }
+ui.play.addEventListener("click", () => playing ? pause() : play());
+ui.big.addEventListener("click", () => play());
+ui.scrub.addEventListener("input", () => { if (playing) pause(); show(+ui.scrub.value); });
+ui.sound.addEventListener("click", () => { const was = playing; if (was) pause(); soundOn = !soundOn; syncSoundBtn(); if (was) play(); });
+document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); playing ? pause() : play(); } });
+
+fontsReady.then(() => { ui.loading.hidden = true; show(RENDER ? 0 : (reduced ? 10.45 : 10.45)); window.REEL.ready = true; });
+</script>
